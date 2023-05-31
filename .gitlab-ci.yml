@@ -1,0 +1,37 @@
+stages:
+  - build
+  - deploy
+
+before_script:
+  - 'npm install'
+
+build_job:
+  stage: build  # the build process will only be started by git tag commits
+  tags:
+    - build
+  image: node:14-alpine
+  script:
+    - npm run build 
+
+
+  artifacts:
+    expire_in: 1 week  # save gitlab server space, we copy the files we need to deploy folder later on
+    paths:
+      - ./bin/react_build/
+
+deploy_job:
+  stage: deploy
+  tags:
+    - deploy
+  image: mcr.microsoft.com/azure-cli
+  dependencies:
+    - build_job
+  before_script:
+    - 'cd bin'
+    - 'zip -r ./artifacts.zip .'
+    - 'az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID'
+    - 'az account set --subscription $AZURE_SUBSCRIPTION_ID'
+    
+  
+  script:
+    - az webapp deployment source config-zip --resource-group $AZURE_RESOURCE_GROUP --name $AZURE_WEBAPP_NAME --src ./artifacts.zip
